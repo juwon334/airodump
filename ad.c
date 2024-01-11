@@ -10,6 +10,12 @@ struct ieee80211_radiotap_header {
 	u_int32_t       it_present;     /* fields present */
 } __attribute__((__packed__));
 
+struct present
+{
+	u_int32_t present;
+};
+
+
 void usage() {
 	printf("syntax: ./ad <interface>\n");
 	printf("sample: ./ad wlan0\n");
@@ -22,6 +28,16 @@ void printBinary(unsigned int num) {
 		mask >>= 1;
 	}
 	printf("\n");
+}
+
+
+void binaryToIntArray(unsigned int num, int *arr) {
+    unsigned int mask = 1 << (sizeof(num) * 8 - 1);
+
+    for (int i = 0; i < sizeof(num) * 8; i++) {
+        arr[i] = (num & mask) ? 1 : 0;
+        mask >>= 1;
+    }
 }
 
 typedef struct {
@@ -44,6 +60,8 @@ bool parse(Param* param, int argc, char* argv[]) {
 int main(int argc, char* argv[]) {
 	if (!parse(&param, argc, argv))
 		return -1;
+	
+	int binary[32];
 
 	char errbuf[PCAP_ERRBUF_SIZE];
 	pcap_t* pcap = pcap_open_live(param.dev_, BUFSIZ, 1, 1000, errbuf);
@@ -61,17 +79,23 @@ int main(int argc, char* argv[]) {
 			printf("pcap_next_ex return %d(%s)\n", res, pcap_geterr(pcap));
 			break;
 		}
-		
 		struct ieee80211_radiotap_header *rheader = (struct ieee80211_radiotap_header*)packet;
+		struct present *rpresent = (struct present*)packet+1;
 		int x = packet[rheader->it_len];
 		if(x != 0x80)
 			continue;
 		printf("%u bytes captured\n", header->caplen);
 		printf("version : %d\n",rheader->it_version);
 		printf("length : %d\n",rheader->it_len);
-		printf("present : %2x\n",rheader->it_present);
-		printf("present : %d\n",rheader->it_present);
-		//printBinary(rheader->it_present);
+		printf("present1 : 0x%2x\n",rpresent->present);
+		binaryToIntArray(rpresent->present, binary);
+		int j = 2;
+		while(binary[0] == 1){
+			u_int32_t *k = (u_int32_t*)packet+j;
+			printf("present%d : 0x%2x\n",j-1,*k);
+			binaryToIntArray(*k, binary);
+			j++;
+		}
 		printf("=====================================\n");
 	}
 	pcap_close(pcap);
