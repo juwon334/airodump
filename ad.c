@@ -15,6 +15,16 @@ void usage() {
 	printf("sample: ./ad wlan0\n");
 }
 
+void printBinary(unsigned int num) {
+    unsigned int mask = 1 << (sizeof(num) * 8 - 1);
+
+    for (int i = 0; i < sizeof(num) * 8; i++) {
+        printf("%d", (num & mask) ? 1 : 0);
+        mask >>= 1;
+    }
+    printf("\n");
+}
+
 typedef struct {
 	char* dev_;
 } Param;
@@ -54,9 +64,15 @@ int main(int argc, char* argv[]) {
 		}
 
         struct ieee80211_radiotap_header *rheader = (struct ieee80211_radiotap_header*)packet;
-        printf("%d\n",rheader->it_version);
-
 		printf("%u bytes captured\n", header->caplen);
+        printf("version : %d\n",rheader->it_version);
+        printf("length : %d\n",rheader->it_len);
+		printf("present : %d\n",rheader->it_present);
+        printf("present : %2X\n",rheader->it_present);
+		printBinary(rheader->it_present);
+		printf("=====================================\n");
+		36
+		
     }
     pcap_close(pcap);
 	return 0;
