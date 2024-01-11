@@ -4,25 +4,24 @@
 #include <arpa/inet.h>
 
 struct ieee80211_radiotap_header {
-        u_int8_t        it_version;     /* set to 0 */
-        u_int8_t        it_pad;
-        u_int16_t       it_len;         /* entire length */
-        u_int32_t       it_present;     /* fields present */
+	u_int8_t        it_version;     /* set to 0 */
+	u_int8_t        it_pad;
+	u_int16_t       it_len;         /* entire length */
+	u_int32_t       it_present;     /* fields present */
 } __attribute__((__packed__));
 
 void usage() {
 	printf("syntax: ./ad <interface>\n");
 	printf("sample: ./ad wlan0\n");
 }
-tt
 void printBinary(unsigned int num) {
-    unsigned int mask = 1 << (sizeof(num) * 8 - 1);
+	unsigned int mask = 1 << (sizeof(num) * 8 - 1);
 
-    for (int i = 0; i < sizeof(num) * 8; i++) {
-        printf("%d", (num & mask) ? 1 : 0);
-        mask >>= 1;
-    }
-    printf("\n");
+	for (int i = 0; i < sizeof(num) * 8; i++) {
+		printf("%d", (num & mask) ? 1 : 0);
+		mask >>= 1;
+	}
+	printf("\n");
 }
 
 typedef struct {
@@ -62,18 +61,19 @@ int main(int argc, char* argv[]) {
 			printf("pcap_next_ex return %d(%s)\n", res, pcap_geterr(pcap));
 			break;
 		}
-
-        struct ieee80211_radiotap_header *rheader = (struct ieee80211_radiotap_header*)packet;
-		printf("%u bytes captured\n", header->caplen);
-        printf("version : %d\n",rheader->it_version);
-        printf("length : %d\n",rheader->it_len);
-		printf("present : %d\n",rheader->it_present);
-        printf("present : %2X\n",rheader->it_present);
-		printBinary(rheader->it_present);
-		printf("=====================================\n");
-		36
 		
-    }
-    pcap_close(pcap);
+		struct ieee80211_radiotap_header *rheader = (struct ieee80211_radiotap_header*)packet;
+		int x = packet[rheader->it_len];
+		if(x != 0x80)
+			continue;
+		printf("%u bytes captured\n", header->caplen);
+		printf("version : %d\n",rheader->it_version);
+		printf("length : %d\n",rheader->it_len);
+		printf("present : %2x\n",rheader->it_present);
+		printf("present : %d\n",rheader->it_present);
+		//printBinary(rheader->it_present);
+		printf("=====================================\n");
+	}
+	pcap_close(pcap);
 	return 0;
 }
