@@ -14,7 +14,7 @@ void usage() {
 	printf("syntax: ./ad <interface>\n");
 	printf("sample: ./ad wlan0\n");
 }
-
+tt
 void printBinary(unsigned int num) {
     unsigned int mask = 1 << (sizeof(num) * 8 - 1);
 
