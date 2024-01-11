@@ -60,9 +60,8 @@ bool parse(Param* param, int argc, char* argv[]) {
 int main(int argc, char* argv[]) {
 	if (!parse(&param, argc, argv))
 		return -1;
-	
+	int offset;
 	int binary[32];
-
 	char errbuf[PCAP_ERRBUF_SIZE];
 	pcap_t* pcap = pcap_open_live(param.dev_, BUFSIZ, 1, 1000, errbuf);
 	if (pcap == NULL) {
@@ -82,19 +81,21 @@ int main(int argc, char* argv[]) {
 		struct ieee80211_radiotap_header *rheader = (struct ieee80211_radiotap_header*)packet;
 		struct present *rpresent = (struct present*)packet+1;
 		int x = packet[rheader->it_len];
+
 		if(x != 0x80)
 			continue;
+		offset = 2;
 		printf("%u bytes captured\n", header->caplen);
 		printf("version : %d\n",rheader->it_version);
 		printf("length : %d\n",rheader->it_len);
 		printf("present1 : 0x%2x\n",rpresent->present);
 		binaryToIntArray(rpresent->present, binary);
-		int j = 2;
+		
 		while(binary[0] == 1){
-			u_int32_t *k = (u_int32_t*)packet+j;
-			printf("present%d : 0x%2x\n",j-1,*k);
+			u_int32_t *k = (u_int32_t*)packet+offset;
+			printf("present%d : 0x%2x\n",offset-1,*k);
 			binaryToIntArray(*k, binary);
-			j++;
+			offset++;
 		}
 		printf("=====================================\n");
 	}
