@@ -90,11 +90,13 @@ int main(int argc, char* argv[]) {
 		printf("length : %d\n",rheader->it_len);
 		printf("present1 : 0x%2x\n",rpresent->present);
 		binaryToIntArray(rpresent->present, binary);
+		printf("TSFT : %2x\n",binary[sizeof(binary)]);
 		
 		while(binary[0] == 1){
 			u_int32_t *k = (u_int32_t*)packet+offset;
 			printf("present%d : 0x%2x\n",offset-1,*k);
 			binaryToIntArray(*k, binary);
+			printf("TSFT : %2x\n",binary[sizeof(binary)]);
 			offset++;
 		}
 		printf("=====================================\n");
