@@ -179,11 +179,11 @@ int main(int argc, char* argv[]) {
 	char binary[32];
 	signed char antenna;
 	char errbuf[PCAP_ERRBUF_SIZE];
-	pcap_t* pcap = pcap_open_live(param.dev_, BUFSIZ, 1, 1000, errbuf);
-	if (pcap == NULL) {
-		fprintf(stderr, "pcap_open_live(%s) return null - %s\n", param.dev_, errbuf);
-		return -1;
-	}
+    pcap_t* pcap = pcap_open_offline(argv[1], errbuf);
+    if (pcap == NULL) {
+        fprintf(stderr, "pcap_open_offline(%s) return null - %s\n", argv[1], errbuf);
+        return -1;
+    }
 
 	while (true) {
 		struct pcap_pkthdr* header;
@@ -200,10 +200,11 @@ int main(int argc, char* argv[]) {
 		struct ieee80211_radiotap_header *rheader = (struct ieee80211_radiotap_header*)packet;
 		int x = packet[rheader->it_len];
 		offset = 1;
+
 		u_int32_t *present = (u_int32_t*)packet+offset;
+
 		if(x != 0x80)
 			continue;
-
 		binaryToIntArray(*present, binary);
 		while(binary[0] == 1){
 			present = (u_int32_t*)packet+offset;
@@ -213,10 +214,9 @@ int main(int argc, char* argv[]) {
 				tsft++;
 			offset++;
 		}
-
-        if(binary[0] != 1)
+		if(binary[0] != 1)
 			offset++;
-            
+		
 		offset *= 4;
 
 		if(tsft != 0){
@@ -225,6 +225,7 @@ int main(int argc, char* argv[]) {
 		offset += 6;
 
 		antenna = (signed char)packet[offset];
+		printf("test : %2x\n",packet[offset]);
 		printf("Pwr : %d\n",antenna);
 		struct beacon_frame *beacon = (struct beacon_frame*)(packet+(rheader->it_len));
 		printf("bssid : ");
