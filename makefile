@@ -2,7 +2,11 @@ LDLIBS += -lpcap
 
 all: ad
 
-pcap-test: ad.c
+all: test
+
+airodump_on: ad.c
+
+airodump_off: test.c
 
 clean:
 	rm -f ad *.o
