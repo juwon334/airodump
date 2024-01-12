@@ -179,11 +179,11 @@ int main(int argc, char* argv[]) {
 	char binary[32];
 	signed char antenna;
 	char errbuf[PCAP_ERRBUF_SIZE];
-    pcap_t* pcap = pcap_open_offline(argv[1], errbuf);
-    if (pcap == NULL) {
-        fprintf(stderr, "pcap_open_offline(%s) return null - %s\n", argv[1], errbuf);
-        return -1;
-    }
+	pcap_t* pcap = pcap_open_offline(argv[1], errbuf);
+	if (pcap == NULL) {
+		fprintf(stderr, "pcap_open_offline(%s) return null - %s\n", argv[1], errbuf);
+		return -1;
+	}
 
 	while (true) {
 		struct pcap_pkthdr* header;
@@ -216,7 +216,7 @@ int main(int argc, char* argv[]) {
 		}
 		if(binary[0] != 1)
 			offset++;
-		
+
 		offset *= 4;
 
 		if(tsft != 0){
@@ -225,7 +225,6 @@ int main(int argc, char* argv[]) {
 		offset += 6;
 
 		antenna = (signed char)packet[offset];
-		printf("test : %2x\n",packet[offset]);
 		printf("Pwr : %d\n",antenna);
 		struct beacon_frame *beacon = (struct beacon_frame*)(packet+(rheader->it_len));
 		printf("bssid : ");
