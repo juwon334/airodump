@@ -2,6 +2,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <arpa/inet.h>
+#include <string.h>
+#include <stdlib.h>
 
 struct ieee80211_radiotap_header {
 	u_int8_t        it_version;     /* set to 0 */
@@ -11,41 +13,118 @@ struct ieee80211_radiotap_header {
 } __attribute__((__packed__));
 
 struct ieee80211_header {
-    uint16_t frame_control;
-    uint16_t duration_id;
-    uint8_t readdr1[6];
+	uint16_t frame_control;
+	uint16_t duration_id;
+	uint8_t readdr1[6];
 	uint8_t sourceaddr4[6];
 	uint8_t bssid[6];
-    uint16_t sequence_control;
-    // addr4는 일부 프레임 유형에서만 사용됩니다.
+	uint16_t sequence_control;
 };
 
 // 비콘 프레임의 고정 필드
 struct beacon_frame_fixed {
-    uint64_t timestamp; // 타임스탬프
-    uint16_t beacon_interval; // 비콘 인터벌
-    uint16_t capabilities_info; // 캡 능력 정보
+	uint8_t timestamp[8];
+	uint8_t beacon_interval[2]; 
+	uint8_t capabilities_info[2];
 };
 
 // 정보 요소 (가변 길이)
 struct info_element {
-    uint8_t id; // 정보 요소 ID
-    uint8_t length; // 정보 요소 길이
-    uint8_t data[]; // 정보 요소 데이터 (가변 길이)
+	uint8_t id;
+	uint8_t length;
+	uint8_t data[];
 };
 
 // 전체 비콘 프레임
 struct beacon_frame {
-    struct ieee80211_header header; // 공통 헤더
-    struct beacon_frame_fixed fixed; // 고정 필드
-    struct info_element ie[]; // 정보 요소 (가변 길이 배열)
+	struct ieee80211_header header;
+	struct beacon_frame_fixed fixed;
+	struct info_element ie[];
 };
 
 struct present
 {
 	u_int32_t present;
 };
+char* uint8ArrayToAsciiString(const uint8_t *array, size_t size) {
+	char *asciiString = malloc(size + 1); // +1 for null-terminator
+	if (asciiString == NULL) {
+		return NULL;
+	}
 
+	for (size_t i = 0; i < size; ++i) {
+		asciiString[i] = (char)array[i];
+	}
+
+	asciiString[size] = '\0';
+	return asciiString;
+}
+typedef struct ssid_count {
+	char ssid[33];
+	int count;
+	struct ssid_count *next;
+} ssid_count_t;
+
+ssid_count_t *head = NULL;
+
+ssid_count_t *find_or_create_ssid(const char *ssid) {
+	ssid_count_t *current = head;
+	while (current != NULL) {
+		if (strcmp(current->ssid, ssid) == 0) {
+			return current;
+		}
+		current = current->next;
+	}
+
+	// 새로운 SSID 항목 생성
+	ssid_count_t *new_node = (ssid_count_t *)malloc(sizeof(ssid_count_t));
+	if (new_node == NULL) {
+		fprintf(stderr, "Memory allocation failed.\n");
+		exit(EXIT_FAILURE);
+	}
+	strncpy(new_node->ssid, ssid, 32);
+	new_node->ssid[32] = '\0'; // 널 종료 문자 보장
+	new_node->count = 0;
+	new_node->next = head;
+	head = new_node;
+	return new_node;
+}
+void increment_and_print_ssid_count(const char *ssid) {
+	ssid_count_t *ssid_node = find_or_create_ssid(ssid);
+	ssid_node->count++;
+	printf("SSID : %s\nbeacons : %d\n", ssid, ssid_node->count);
+}
+
+// 메모리 정리 함수
+void cleanup() {
+	ssid_count_t *current = head;
+	while (current != NULL) {
+		ssid_count_t *temp = current;
+		current = current->next;
+		free(temp);
+	}
+}
+
+void print_info_elements(const u_char* packet, int offset, size_t packet_len) {
+	while (offset < packet_len) {
+		struct info_element* ie = (struct info_element*)(packet + offset);
+
+		if (ie->id == 3 && ie->length == 1) {
+			printf("Channel: %d\n", ie->data[0]);
+		}
+
+		if (ie->id == 0) { // SSID 정보 요소
+			char *ssid = uint8ArrayToAsciiString(ie->data, ie->length);
+			if (ssid != NULL) {
+				increment_and_print_ssid_count(ssid); // SSID 카운트 증가 및 출력
+				free(ssid);
+			} else {
+				printf("Memory allocation failed for SSID.\n");
+			}
+		}
+		offset += 2 + ie->length;
+	}
+}
 
 void usage() {
 	printf("syntax: ./ad <interface>\n");
@@ -61,14 +140,12 @@ void printBinary(unsigned int num) {
 	printf("\n");
 }
 
-
 void binaryToIntArray(unsigned int num, char *arr) {
-    unsigned int mask = 1 << (sizeof(num) * 8 - 1);
-
-    for (int i = 0; i < sizeof(num) * 8; i++) {
-        arr[i] = (num & mask) ? 1 : 0;
-        mask >>= 1;
-    }
+	unsigned int mask = 1 << (sizeof(num) * 8 - 1);
+	for (int i = 0; i < sizeof(num) * 8; i++) {
+		arr[i] = (num & mask) ? 1 : 0;
+		mask >>= 1;
+	}
 }
 
 typedef struct {
@@ -92,10 +169,12 @@ void print_addr(u_int8_t *m){
 	printf("\n");
 }
 
+
 int main(int argc, char* argv[]) {
 	if (!parse(&param, argc, argv))
 		return -1;
 	int offset;
+	size_t size;
 	int tsft;
 	char binary[32];
 	signed char antenna;
@@ -112,27 +191,25 @@ int main(int argc, char* argv[]) {
 		tsft = 0;
 		int res = pcap_next_ex(pcap, &header, &packet);
 		if (res == 0) continue;
+
 		if (res == PCAP_ERROR || res == PCAP_ERROR_BREAK) {
 			printf("pcap_next_ex return %d(%s)\n", res, pcap_geterr(pcap));
 			break;
 		}
+
 		struct ieee80211_radiotap_header *rheader = (struct ieee80211_radiotap_header*)packet;
 		int x = packet[rheader->it_len];
 		offset = 1;
 		u_int32_t *present = (u_int32_t*)packet+offset;
 		if(x != 0x80)
 			continue;
-		
-		printf("%u bytes captured\n", header->caplen);
-		printf("version : %d\n",rheader->it_version);
-		printf("length : %d\n",rheader->it_len);
+
 		binaryToIntArray(*present, binary);
-		
 		while(binary[0] == 1){
 			present = (u_int32_t*)packet+offset;
-			printf("present%d : 0x%2x\n",offset,*present);
 			binaryToIntArray(*present, binary);
 			if(binary[sizeof(binary)-1] == 1)
+				//mactime
 				tsft++;
 			offset++;
 		}
@@ -143,21 +220,17 @@ int main(int argc, char* argv[]) {
 			offset += 8;
 		}
 		offset += 6;
+
 		antenna = (signed char)packet[offset];
-		printf("Antenna : %d\n",antenna);
-		struct ieee80211_header *beacon = (struct ieee80211_header*)(packet+(rheader->it_len));
-		printf("frame control : %2x\n",beacon->frame_control);
-		printf("duration_id : %2x\n",beacon->duration_id);
-		printf("readdr : ");
-		print_addr(beacon->readdr1);
-		printf("sourceaddr : ");
-		print_addr(beacon->sourceaddr4);
+		printf("Pwr : %d\n",antenna);
+		struct beacon_frame *beacon = (struct beacon_frame*)(packet+(rheader->it_len));
 		printf("bssid : ");
-		print_addr(beacon->bssid);
-		printf("sequ : %2x",beacon->sequence_control);
-		printf("\n");
+		print_addr(beacon->header.bssid);
+		int beacon_frame_offset = rheader->it_len + sizeof(struct ieee80211_header) + sizeof(struct beacon_frame_fixed);
+		print_info_elements(packet, beacon_frame_offset, header->caplen);
 		printf("=====================================\n");
 	}
+	cleanup();
 	pcap_close(pcap);
 	return 0;
 }
