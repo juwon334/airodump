@@ -65,29 +65,39 @@ void print_info_elements(const u_char* packet, int offset, size_t packet_len) {
 
 		if(ie->id == 48){
 			int of = 1;
+			int auth;
 			struct info_element* rsn = (struct info_element*)(packet+offset);
-
-			switch(rsn->data[5]){
-				case 0 : 
+			uint16_t *psuiteCount = (uint16_t*)(rsn->data+6);
+			int *cipher = malloc(*psuiteCount * sizeof(int));
+			for(int i = 0;i<*psuiteCount;i++){
+				uint8_t *psu = (uint8_t*)(rsn->data+6+1+of+(i*4));
+				switch(psu[3]){
+					case 0 : 
 					printf("CIPHER : USE GROUP CIPHER SUITE\n");
+					cipher[i] = 0;
 					break;
 				case 1 :
 					printf("CIPHER : WEP-40\n");
+					cipher[i] = 1;
 					break;
 				case 2 :
 					printf("CIPHER : TKIP\n");
+					cipher[i] = 2;
 					break;
 				case 3 :
 					printf("CIPHER : RESERVATION\n");
+					cipher[i] = 3;
 					break;
 				case 4 :
 					printf("CIPHER : CCMP\n");
+					cipher[i] = 4;
 					break;
 				case 5 :
 					printf("CIPHER : WEP-104\n");
+					cipher[i] = 5;
 					break;
+				}
 			}
-			uint16_t *psuiteCount = (uint16_t*)(rsn->data+6);
 			of *= (*psuiteCount);
 			of *= 4;
 			uint16_t *akmsuitCount = (uint16_t*)(rsn->data+6+of+sizeof(*psuiteCount));
@@ -96,16 +106,31 @@ void print_info_elements(const u_char* packet, int offset, size_t packet_len) {
 				switch(akm[3]){
 					case 0 : 
 						printf("AUTH : Reservation\n");
+						auth = 0;
 						break;
 					case 1 :
 						printf("AUTH : 802.1x\n");
+						auth = 1;
 						break;
 					case 2 :
 						printf("AUTH : PSK\n");
+						auth = 2;
 						break;
 					default :
 						printf("AUTH : VENDOR..\n");
+						auth = 3;
 						break;
+				}
+			}
+			
+			for(int i =0;i<sizeof(cipher);i++){
+				if(cipher[i] == 4 && auth == 2){
+					printf("ENC : WPA2\n");
+					break;
+				}
+					
+				else if(cipher[i] == 2 && auth == 2){
+					printf("ENC : WAP\n");
 				}
 			}
 		}

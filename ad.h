@@ -28,21 +28,18 @@ struct ieee80211_header {
 	uint16_t sequence_control;
 };
 
-// 비콘 프레임의 고정 필드
 struct beacon_frame_fixed {
 	uint8_t timestamp[8];
 	uint8_t beacon_interval[2]; 
 	uint8_t capabilities_info[2];
 };
 
-// 정보 요소 (가변 길이)
 struct info_element {
 	uint8_t id;
 	uint8_t length;
 	uint8_t data[];
 };
 
-// 전체 비콘 프레임
 struct beacon_frame {
 	struct ieee80211_header header;
 	struct beacon_frame_fixed fixed;
