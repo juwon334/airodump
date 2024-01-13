@@ -47,6 +47,7 @@ void cleanup() {
 }
 
 void print_info_elements(const u_char* packet, int offset, size_t packet_len) {
+
 	while (offset < packet_len) {
 		struct info_element* ie = (struct info_element*)(packet + offset);
 		if (ie->id == 3 && ie->length == 1) {

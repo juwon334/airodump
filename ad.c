@@ -62,6 +62,7 @@ void print_info_elements(const u_char* packet, int offset, size_t packet_len) {
 				printf("Memory allocation failed for SSID.\n");
 			}
 		}
+		
 		if(ie->id == 48){
 			int of = 1;
 			int auth;
@@ -211,7 +212,7 @@ int main(int argc, char* argv[]) {
 				break;
 			}
 		}
-		
+
 		if(tsft != 0){
 			offset+=8;
 		}
