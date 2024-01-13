@@ -1,64 +1,5 @@
-#include <pcap.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <arpa/inet.h>
-#include <string.h>
-#include <stdlib.h>
+#include "ad.h"
 
-struct ieee80211_radiotap_header {
-	u_int8_t        it_version;     /* set to 0 */
-	u_int8_t        it_pad;
-	u_int16_t       it_len;         /* entire length */
-	u_int32_t       it_present;     /* fields present */
-} __attribute__((__packed__));
-
-struct ieee80211_header {
-	uint16_t frame_control;
-	uint16_t duration_id;
-	uint8_t readdr1[6];
-	uint8_t sourceaddr4[6];
-	uint8_t bssid[6];
-	uint16_t sequence_control;
-};
-
-// 비콘 프레임의 고정 필드
-struct beacon_frame_fixed {
-	uint8_t timestamp[8];
-	uint8_t beacon_interval[2]; 
-	uint8_t capabilities_info[2];
-};
-
-// 정보 요소 (가변 길이)
-struct info_element {
-	uint8_t id;
-	uint8_t length;
-	uint8_t data[];
-};
-
-// 전체 비콘 프레임
-struct beacon_frame {
-	struct ieee80211_header header;
-	struct beacon_frame_fixed fixed;
-	struct info_element ie[];
-};
-
-struct present
-{
-	u_int32_t present;
-};
-char* uint8ArrayToAsciiString(const uint8_t *array, size_t size) {
-	char *asciiString = malloc(size + 1); // +1 for null-terminator
-	if (asciiString == NULL) {
-		return NULL;
-	}
-
-	for (size_t i = 0; i < size; ++i) {
-		asciiString[i] = (char)array[i];
-	}
-
-	asciiString[size] = '\0';
-	return asciiString;
-}
 typedef struct ssid_count {
 	char ssid[33];
 	int count;
@@ -108,7 +49,6 @@ void cleanup() {
 void print_info_elements(const u_char* packet, int offset, size_t packet_len) {
 	while (offset < packet_len) {
 		struct info_element* ie = (struct info_element*)(packet + offset);
-
 		if (ie->id == 3 && ie->length == 1) {
 			printf("Channel: %d\n", ie->data[0]);
 		}
@@ -122,6 +62,53 @@ void print_info_elements(const u_char* packet, int offset, size_t packet_len) {
 				printf("Memory allocation failed for SSID.\n");
 			}
 		}
+
+		if(ie->id == 48){
+			int of = 1;
+			struct info_element* rsn = (struct info_element*)(packet+offset);
+
+			switch(rsn->data[5]){
+				case 0 : 
+					printf("CIPHER : USE GROUP CIPHER SUITE\n");
+					break;
+				case 1 :
+					printf("CIPHER : WEP-40\n");
+					break;
+				case 2 :
+					printf("CIPHER : TKIP\n");
+					break;
+				case 3 :
+					printf("CIPHER : RESERVATION\n");
+					break;
+				case 4 :
+					printf("CIPHER : CCMP\n");
+					break;
+				case 5 :
+					printf("CIPHER : WEP-104\n");
+					break;
+			}
+			uint16_t *psuiteCount = (uint16_t*)(rsn->data+6);
+			of *= (*psuiteCount);
+			of *= 4;
+			uint16_t *akmsuitCount = (uint16_t*)(rsn->data+6+of+sizeof(*psuiteCount));
+			for(int i = 0;i<*akmsuitCount;i++){
+				uint8_t *akm = (uint8_t*)(rsn->data+6+2+of+sizeof(*psuiteCount));
+				switch(akm[3]){
+					case 0 : 
+						printf("AUTH : Reservation\n");
+						break;
+					case 1 :
+						printf("AUTH : 802.1x\n");
+						break;
+					case 2 :
+						printf("AUTH : PSK\n");
+						break;
+					default :
+						printf("AUTH : VENDOR..\n");
+						break;
+				}
+			}
+		}
 		offset += 2 + ie->length;
 	}
 }
@@ -129,23 +116,6 @@ void print_info_elements(const u_char* packet, int offset, size_t packet_len) {
 void usage() {
 	printf("syntax: ./ad <interface>\n");
 	printf("sample: ./ad wlan0\n");
-}
-void printBinary(unsigned int num) {
-	unsigned int mask = 1 << (sizeof(num) * 8 - 1);
-
-	for (int i = 0; i < sizeof(num) * 8; i++) {
-		printf("%d", (num & mask) ? 1 : 0);
-		mask >>= 1;
-	}
-	printf("\n");
-}
-
-void binaryToIntArray(unsigned int num, char *arr) {
-	unsigned int mask = 1 << (sizeof(num) * 8 - 1);
-	for (int i = 0; i < sizeof(num) * 8; i++) {
-		arr[i] = (num & mask) ? 1 : 0;
-		mask >>= 1;
-	}
 }
 
 typedef struct {
@@ -164,11 +134,6 @@ bool parse(Param* param, int argc, char* argv[]) {
 	param->dev_ = argv[1];
 	return true;
 }
-void print_addr(u_int8_t *m){
-	printf("%02x:%02x:%02x:%02x:%02x:%02x", m[0], m[1], m[2], m[3], m[4], m[5]);
-	printf("\n");
-}
-
 
 int main(int argc, char* argv[]) {
 	if (!parse(&param, argc, argv))
@@ -184,11 +149,11 @@ int main(int argc, char* argv[]) {
 		fprintf(stderr, "pcap_open_live(%s) return null - %s\n", param.dev_, errbuf);
 		return -1;
 	}
-
 	while (true) {
 		struct pcap_pkthdr* header;
 		const u_char* packet;
 		tsft = 0;
+		offset = 0;
 		int res = pcap_next_ex(pcap, &header, &packet);
 		if (res == 0) continue;
 
@@ -199,33 +164,35 @@ int main(int argc, char* argv[]) {
 
 		struct ieee80211_radiotap_header *rheader = (struct ieee80211_radiotap_header*)packet;
 		int x = packet[rheader->it_len];
-		offset = 1;
-		u_int32_t *present = (u_int32_t*)packet+offset;
 		if(x != 0x80)
 			continue;
-
+		u_int32_t *present = (u_int32_t*)(packet+sizeof(*rheader));
 		binaryToIntArray(*present, binary);
-		while(binary[0] == 1){
-			present = (u_int32_t*)packet+offset;
+		
+		while(1){
+			present = (u_int32_t*)(packet+sizeof(*rheader)+offset);
 			binaryToIntArray(*present, binary);
-			if(binary[sizeof(binary)-1] == 1)
-				//mactime
-				tsft++;
-			offset++;
+			if(binary[0] == 1){
+				if(binary[sizeof(binary)-1] == 1){
+					tsft++;
+				}
+				offset+=4;
+				continue;
+			}
+			else if(binary[0]!=1){
+				if(binary[sizeof(binary)-1] == 1){
+					tsft++;
+				}
+				offset+=4;
+				break;
+			}
 		}
-
-        if(binary[0] != 1)
-			offset++;
-            
-		offset *= 4;
-
 		if(tsft != 0){
-			offset += 8;
+			offset+=8;
 		}
-		offset += 6;
 
-		antenna = (signed char)packet[offset];
-		printf("Pwr : %d\n",antenna);
+		struct nextpresent *np = (struct nextpresent*)(packet+sizeof(*rheader)+offset);
+		printf("pwr : %d\n",(signed char)np->pwr);
 		struct beacon_frame *beacon = (struct beacon_frame*)(packet+(rheader->it_len));
 		printf("bssid : ");
 		print_addr(beacon->header.bssid);
