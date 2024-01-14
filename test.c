@@ -166,6 +166,7 @@ int main(int argc, char* argv[]) {
 		return -1;
 	int offset;
 	size_t size;
+	u_int32_t *present;
 	int tsft;
 	char binary[32];
 	signed char antenna;
@@ -191,11 +192,10 @@ int main(int argc, char* argv[]) {
 
 		struct ieee80211_radiotap_header *rheader = (struct ieee80211_radiotap_header*)packet;
 		int x = packet[rheader->it_len];
+
 		if(x != 0x80)
 			continue;
-		u_int32_t *present = (u_int32_t*)(packet+sizeof(*rheader));
-		binaryToIntArray(*present, binary);
-		
+
 		while(1){
 			present = (u_int32_t*)(packet+sizeof(*rheader)+offset);
 			binaryToIntArray(*present, binary);
@@ -214,15 +214,18 @@ int main(int argc, char* argv[]) {
 				break;
 			}
 		}
+
 		if(tsft != 0){
 			offset+=8;
 		}
 
 		struct nextpresent *np = (struct nextpresent*)(packet+sizeof(*rheader)+offset);
 		printf("pwr : %d\n",(signed char)np->pwr);
+
 		struct beacon_frame *beacon = (struct beacon_frame*)(packet+(rheader->it_len));
 		printf("bssid : ");
 		print_addr(beacon->header.bssid);
+		
 		int beacon_frame_offset = rheader->it_len + sizeof(struct ieee80211_header) + sizeof(struct beacon_frame_fixed);
 		print_info_elements(packet, beacon_frame_offset, header->caplen);
 		printf("=====================================\n");
