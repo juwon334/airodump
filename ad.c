@@ -133,6 +133,7 @@ void print_info_elements(const u_char* packet, int offset, size_t packet_len) {
 					printf("ENC : WAP\n");
 				}
 			}
+			break;
 		}
 		offset += 2 + ie->length;
 	}
